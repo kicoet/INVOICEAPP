@@ -357,6 +357,57 @@ function PdfEditorial({ inv, comp, brand }) {
   );
 }
 
+// ---- PDF generation helpers (html2pdf bundled CDN) ----
+function pdfFilename(inv) {
+  return (inv.invNo || 'invoice').replace(/[\/\\:*?"<>|]/g, '-') + '.pdf';
+}
+async function buildPdfBlob() {
+  const el = document.querySelector('.pdf-page');
+  if (!el || !window.html2pdf) return null;
+  const prevZoom = el.style.zoom;
+  el.style.zoom = '1'; // render at native scale, ignore mobile preview zoom
+  try {
+    return await window.html2pdf().set({
+      margin: 0,
+      image: { type: 'jpeg', quality: 0.97 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    }).from(el).outputPdf('blob');
+  } finally {
+    el.style.zoom = prevZoom;
+  }
+}
+async function downloadPdf(inv) {
+  const blob = await buildPdfBlob();
+  if (!blob) { alert('PDF generator belum siap. Tunggu sebentar.'); return; }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = pdfFilename(inv);
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+async function sharePdf(inv) {
+  const blob = await buildPdfBlob();
+  if (!blob) { alert('PDF generator belum siap.'); return; }
+  const filename = pdfFilename(inv);
+  const file = new File([blob], filename, { type: 'application/pdf' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: inv.invNo, text: 'Invoice ' + inv.invNo });
+      return;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // user cancelled
+  }
+  // Fallback: download instead
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  alert('Browser kamu tidak support share file. PDF di-download sebagai gantinya.');
+}
+
 function PdfPreviewModal({ inv, brand, onClose }) {
   const { fmtIDR, computeInvoice } = KPO;
   const comp = useMemoInv(()=>{
@@ -370,24 +421,21 @@ function PdfPreviewModal({ inv, brand, onClose }) {
   return (
     <div className="scrim" onClick={(e)=>{ if(e.target.classList.contains('scrim')) onClose(); }}>
       <div className="modal" style={{width:720,height:'92vh',display:'flex',flexDirection:'column'}}>
-        <div style={{padding:'14px 18px',borderBottom:'1px solid var(--line)',display:'flex',alignItems:'center',gap:10}}>
-          <div>
+        <div style={{padding:'14px 18px',borderBottom:'1px solid var(--line)',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+          <div style={{flex:1,minWidth:0}}>
             <div className="card-sub">Pratinjau PDF · A4</div>
             <div className="font-serif" style={{fontSize:18}}>{inv.invNo}</div>
           </div>
-          <div style={{marginLeft:'auto',display:'flex',gap:6}}>
-            <button className="btn btn-sm" onClick={()=>window.print()}><Icon name="download" size={13}/> Download / Print</button>
-            <button className="btn btn-sm" onClick={async ()=>{
-              try {
-                if (navigator.share) await navigator.share({ title: inv.invNo, text: 'Invoice ' + inv.invNo, url: location.href });
-                else { await navigator.clipboard.writeText(location.href); alert('Link tersalin.'); }
-              } catch {}
-            }}><Icon name="share" size={13}/> Bagikan</button>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            <button className="btn btn-sm" onClick={()=>downloadPdf(inv)}><Icon name="download" size={13}/> Download PDF</button>
+            <button className="btn btn-sm" onClick={()=>sharePdf(inv)}><Icon name="share" size={13}/> Bagikan</button>
             <button className="btn btn-icon btn-ghost" onClick={onClose}><Icon name="close" size={14}/></button>
           </div>
         </div>
-        <div style={{flex:1,padding:'18px 24px',overflow:'auto',background:'var(--bg-inset)',display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <Template inv={inv} comp={comp} brand={brand}/>
+        <div style={{flex:1,padding:'18px 12px',overflow:'auto',background:'var(--bg-inset)',display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <div className="pdf-shell">
+            <Template inv={inv} comp={comp} brand={brand}/>
+          </div>
         </div>
       </div>
     </div>

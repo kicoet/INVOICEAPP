@@ -35,7 +35,7 @@ function InvoicesScreen({ goCreate, goView, goEdit, onDelete, invoices }) {
       </div>
 
       <div className="card" style={{overflow:'hidden'}}>
-        <table className="tbl">
+        <table className="tbl tbl-cards">
           <thead>
             <tr>
               <th style={{width:160}}>No. Invoice</th>
@@ -58,19 +58,19 @@ function InvoicesScreen({ goCreate, goView, goEdit, onDelete, invoices }) {
               const c = computeInvoice(inv);
               return (
                 <tr key={inv.id} style={{cursor:'pointer'}} onClick={()=>goView(inv.id)}>
-                  <td className="num" style={{fontSize:12.5}}>{inv.id}</td>
-                  <td>
+                  <td className="num full" data-label="No. Invoice" style={{fontSize:12.5}}>{inv.id}</td>
+                  <td data-label="Customer">
                     <div style={{lineHeight:1.2}}>
                       <div>{inv.customer.nama}</div>
                       <div style={{fontSize:11,color:'var(--ink-mute)'}}>{inv.customer.perusahaan}</div>
                     </div>
                   </td>
-                  <td style={{color:'var(--ink-mute)'}} className="num">{fmtDate(inv.tgl)}</td>
-                  <td style={{color:'var(--ink-mute)'}}>{inv.items.length} item</td>
-                  <td className="num" style={{textAlign:'right'}}>{fmtIDR(c.total)}</td>
-                  <td className="num" style={{textAlign:'right',color:'var(--ink-mute)'}}>{fmtIDR(c.dibayar)}</td>
-                  <td><StatusChip status={inv.status}/></td>
-                  <td onClick={(e)=>e.stopPropagation()}>
+                  <td data-label="Tanggal" style={{color:'var(--ink-mute)'}} className="num">{fmtDate(inv.tgl)}</td>
+                  <td data-label="Items" style={{color:'var(--ink-mute)'}}>{inv.items.length} item</td>
+                  <td data-label="Total" className="num" style={{textAlign:'right'}}>{fmtIDR(c.total)}</td>
+                  <td data-label="Dibayar" className="num" style={{textAlign:'right',color:'var(--ink-mute)'}}>{fmtIDR(c.dibayar)}</td>
+                  <td data-label="Status"><StatusChip status={inv.status}/></td>
+                  <td className="actions" onClick={(e)=>e.stopPropagation()}>
                     <div style={{display:'flex',gap:2,justifyContent:'flex-end'}}>
                       <button className="btn btn-ghost btn-icon" title="Lihat PDF" onClick={()=>goView(inv.id)}><Icon name="eye" size={14}/></button>
                       <button className="btn btn-ghost btn-icon" title="Edit" onClick={()=>goEdit && goEdit(inv.id)}><Icon name="edit" size={14}/></button>
