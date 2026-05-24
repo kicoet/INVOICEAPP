@@ -17,13 +17,14 @@ window.DB = (() => {
   };
   const endpoint = url + '/rest/v1/app_data';
 
-  // Fetch one value by key — returns parsed JSON or null.
+  // Fetch one value by key — returns { value, updatedAt } or null.
   const get = async (k) => {
     try {
-      const r = await fetch(`${endpoint}?key=eq.${encodeURIComponent(k)}&select=value`, { headers });
+      const r = await fetch(`${endpoint}?key=eq.${encodeURIComponent(k)}&select=value,updated_at`, { headers });
       if (!r.ok) return null;
       const rows = await r.json();
-      return rows.length ? rows[0].value : null;
+      if (!rows.length) return null;
+      return { value: rows[0].value, updatedAt: rows[0].updated_at };
     } catch (e) {
       console.warn('[DB.get] offline or failed:', k, e);
       return null;

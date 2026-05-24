@@ -8,7 +8,18 @@ function PdfKemala({ inv, comp, brand }) {
   const orangeSoft = brand.brandColorSoft || '#FDF6EE';
 
   // Indonesian rupiah formatting: Rp 4.225.000
-  const rp = (n) => 'Rp ' + Number(n).toLocaleString('id-ID');
+  // Manual implementation — toLocaleString('id-ID') in some engines emits
+  // non-breaking / narrow spaces that render as visible gaps in html2canvas.
+  const rp = (n) => {
+    const num = Math.round(Math.abs(+n || 0)).toString();
+    const sign = (+n < 0) ? '-' : '';
+    let out = '';
+    for (let i = num.length - 1, c = 0; i >= 0; i--, c++) {
+      if (c && c % 3 === 0) out = '.' + out;
+      out = num[i] + out;
+    }
+    return 'Rp ' + sign + out;
+  };
 
   // dd/mm/yyyy from ISO YYYY-MM-DD (or any Date-parseable string)
   const fmtTgl = (s) => {

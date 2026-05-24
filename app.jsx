@@ -18,6 +18,14 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 //       - If cloud has data → adopt it (cloud wins)
 //       - If cloud empty but local has data → migrate local UP to cloud
 //   - After first sync, every change → localStorage + Supabase
+// Timestamp-based merge: every local setVal writes a key:mtime to localStorage.
+// On cloud fetch, only adopt remote if its updated_at is NEWER than our local mtime.
+// This prevents the "logo flicker" race: refresh during in-flight write no longer
+// reverts to a stale cloud snapshot.
+const MTIME_KEY = (k) => 'kpo:v1:mtime:' + k;
+const getLocalMtime = (k) => +(localStorage.getItem(MTIME_KEY(k)) || 0);
+const setLocalMtime = (k) => { try { localStorage.setItem(MTIME_KEY(k), String(Date.now())); } catch {} };
+
 function usePersistedCollection(key, initial, revision = 0) {
   const [val, setVal] = useState(() => {
     const cached = KPO.loadCollection(key, initial);
@@ -26,25 +34,40 @@ function usePersistedCollection(key, initial, revision = 0) {
     return (cachedEmpty && seedHasData) ? initial : cached;
   });
   const [loaded, setLoaded] = useState(false);
-  const lastWriteRef = React.useRef(0);
+  const skipNextWriteRef = React.useRef(true); // skip cloud-push on initial mount
 
-  // Cloud fetch — runs on mount + every time `revision` bumps (manual refresh / focus / polling)
+  // Cloud fetch — runs on mount + every time `revision` bumps
   useEffect(() => {
     let cancelled = false;
     if (!window.DB || !window.DB.isConfigured) { setLoaded(true); return; }
-    // Skip cloud fetch if we just wrote (within 1.5s) — avoids round-tripping our own change
-    if (Date.now() - lastWriteRef.current < 1500 && revision > 0) return;
-    window.DB.get(key).then(remote => {
+    window.DB.get(key).then(row => {
       if (cancelled) return;
+      // row = { value, updatedAt } | null
+      const remote = row ? row.value : null;
+      const remoteMtime = row ? new Date(row.updatedAt).getTime() : 0;
+      const localMtime = getLocalMtime(key);
+
       const remoteIsEmpty = remote == null || (Array.isArray(remote) && remote.length === 0);
       const seedHasData   = Array.isArray(initial) ? initial.length > 0 : !!initial;
+
       if (remoteIsEmpty && seedHasData) {
-        window.DB.set(key, initial);
+        // Cloud empty but seed has data → push seed up.
+        skipNextWriteRef.current = false;
         setVal(initial);
-      } else if (remote !== null && remote !== undefined) {
-        // Only update if remote differs from current val (avoid unnecessary re-renders)
+        setLocalMtime(key);
+        window.DB.set(key, initial);
+      } else if (remote != null && remoteMtime >= localMtime) {
+        // Cloud is at least as fresh as local → adopt it.
         const remoteStr = JSON.stringify(remote);
-        setVal(prev => JSON.stringify(prev) === remoteStr ? prev : remote);
+        setVal(prev => {
+          if (JSON.stringify(prev) === remoteStr) return prev;
+          // We're adopting remote — don't re-push to cloud.
+          skipNextWriteRef.current = true;
+          return remote;
+        });
+      } else if (remote != null && remoteMtime < localMtime) {
+        // Our local is newer than cloud → push local up to overwrite.
+        window.DB.set(key, val);
       }
       setLoaded(true);
     });
@@ -61,8 +84,14 @@ function usePersistedCollection(key, initial, revision = 0) {
     } else {
       KPO[key] = val;
     }
-    if (loaded && window.DB && window.DB.isConfigured) {
-      lastWriteRef.current = Date.now();
+    if (!loaded) return;
+    if (skipNextWriteRef.current) {
+      // This setVal came from cloud adoption — don't echo back.
+      skipNextWriteRef.current = false;
+      return;
+    }
+    setLocalMtime(key);
+    if (window.DB && window.DB.isConfigured) {
       window.DB.set(key, val);
     }
   }, [key, val, loaded]);

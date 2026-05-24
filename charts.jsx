@@ -3,10 +3,20 @@ const { useMemo } = React;
 
 function AreaChart({ data, height = 200, format = (v)=>v, accentVar = 'var(--accent)' }) {
   const w = 760, h = height, padL = 36, padR = 16, padT = 14, padB = 24;
-  const max = Math.max(...data.map(d=>d.v)) * 1.1;
+  if (!data || data.length === 0) {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{display:'block'}}>
+        <text x={w/2} y={h/2} textAnchor="middle" fontSize="12" fill="var(--ink-mute)">Belum ada data omzet untuk ditampilkan.</text>
+      </svg>
+    );
+  }
+  const rawMax = Math.max(...data.map(d=>d.v));
+  // Guard divide-by-zero & give a baseline so the line/area still renders when all zeros.
+  const max = rawMax > 0 ? rawMax * 1.1 : 1;
   const min = 0;
-  const sx = i => padL + (i*(w-padL-padR))/(data.length-1);
-  const sy = v => padT + (h-padT-padB) - ((v-min)/(max-min))*(h-padT-padB);
+  const denom = (max - min) || 1;
+  const sx = i => data.length > 1 ? padL + (i*(w-padL-padR))/(data.length-1) : padL + (w-padL-padR)/2;
+  const sy = v => padT + (h-padT-padB) - ((v-min)/denom)*(h-padT-padB);
   const path = data.map((d,i)=> (i===0?'M':'L') + sx(i) + ' ' + sy(d.v)).join(' ');
   const area = path + ` L ${sx(data.length-1)} ${h-padB} L ${sx(0)} ${h-padB} Z`;
   const ticks = 4;
@@ -42,7 +52,15 @@ function AreaChart({ data, height = 200, format = (v)=>v, accentVar = 'var(--acc
 
 function BarChart({ data, height = 200, accentVar = 'var(--accent)' }) {
   const w = 760, h = height, padL = 100, padR = 24, padT = 8, padB = 8;
-  const max = Math.max(...data.map(d=>d.omzet)) * 1.1;
+  if (!data || data.length === 0) {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{display:'block'}}>
+        <text x={w/2} y={h/2} textAnchor="middle" fontSize="12" fill="var(--ink-mute)">Belum ada data per kategori.</text>
+      </svg>
+    );
+  }
+  const rawMax = Math.max(...data.map(d=>d.omzet));
+  const max = rawMax > 0 ? rawMax * 1.1 : 1;
   const bw = (h-padT-padB)/data.length - 14;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
@@ -89,8 +107,9 @@ function Donut({ data, size = 180, accentVar = 'var(--accent)' }) {
 }
 
 function Sparkline({ values, w=80, h=24, color='var(--accent)' }) {
+  if (!values || values.length === 0) return <svg width={w} height={h}/>;
   const max = Math.max(...values), min = Math.min(...values);
-  const sx = i => (i*w)/(values.length-1);
+  const sx = i => values.length > 1 ? (i*w)/(values.length-1) : w/2;
   const sy = v => h - ((v-min)/(max-min||1))*h;
   const path = values.map((v,i)=> (i===0?'M':'L') + sx(i) + ' ' + sy(v)).join(' ');
   return (
