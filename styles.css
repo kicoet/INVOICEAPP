@@ -741,16 +741,29 @@ img { max-width: 100%; height: auto; }
 
 /* ============================================
    PDF preview shell — auto-fits on small screens
+   Uses transform: scale (reliable on iOS Safari, unlike `zoom`)
+   The shell is sized to the post-scale dimensions so the document
+   stays in normal flow and doesn't overlap surrounding chrome.
    ============================================ */
-.pdf-shell { display: inline-block; }
+.pdf-shell { display: inline-block; width: 760px; max-width: 100%; }
+
 @media (max-width: 820px) {
-  .pdf-shell .pdf-page { zoom: 0.46; }
-}
-@media (max-width: 480px) {
-  .pdf-shell .pdf-page { zoom: 0.42; }
-}
-@media (max-width: 380px) {
-  .pdf-shell .pdf-page { zoom: 0.36; }
+  .pdf-shell {
+    position: relative;
+    width: 100%;
+    /* available width minus modal horizontal padding (12px each side = 24px) */
+    height: calc((100vw - 24px) * 1075 / 760);
+    overflow: hidden;
+  }
+  .pdf-shell .pdf-page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 760px !important;
+    min-height: 1075px !important;
+    transform: scale(calc((100vw - 24px) / 760));
+    transform-origin: top left;
+  }
 }
 
 /* ============================================

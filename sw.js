@@ -1,5 +1,5 @@
 // Kemala Profile Office — Service Worker
-const CACHE = 'kemala-v4';
+const CACHE = 'kemala-v5';
 const ASSETS = [
   './',
   './index.html',
