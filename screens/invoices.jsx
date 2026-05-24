@@ -1,7 +1,7 @@
 // ===== Invoices list + Create modal + PDF preview =====
 const { useState: useStateInv, useMemo: useMemoInv, useRef: useRefInv, useEffect: useEffectInv } = React;
 
-function InvoicesScreen({ goCreate, goView, invoices }) {
+function InvoicesScreen({ goCreate, goView, goEdit, onDelete, invoices }) {
   const { fmtIDR, computeInvoice } = KPO;
   const data = invoices || KPO.invoices || [];
   const [q, setQ] = useStateInv('');
@@ -45,7 +45,7 @@ function InvoicesScreen({ goCreate, goView, invoices }) {
               <th style={{textAlign:'right'}}>Total</th>
               <th style={{textAlign:'right'}}>Dibayar</th>
               <th>Status</th>
-              <th style={{width:60}}></th>
+              <th style={{width:130,textAlign:'right'}}>Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -70,7 +70,15 @@ function InvoicesScreen({ goCreate, goView, invoices }) {
                   <td className="num" style={{textAlign:'right'}}>{fmtIDR(c.total)}</td>
                   <td className="num" style={{textAlign:'right',color:'var(--ink-mute)'}}>{fmtIDR(c.dibayar)}</td>
                   <td><StatusChip status={inv.status}/></td>
-                  <td><Icon name="chevron" size={14}/></td>
+                  <td onClick={(e)=>e.stopPropagation()}>
+                    <div style={{display:'flex',gap:2,justifyContent:'flex-end'}}>
+                      <button className="btn btn-ghost btn-icon" title="Lihat PDF" onClick={()=>goView(inv.id)}><Icon name="eye" size={14}/></button>
+                      <button className="btn btn-ghost btn-icon" title="Edit" onClick={()=>goEdit && goEdit(inv.id)}><Icon name="edit" size={14}/></button>
+                      <button className="btn btn-ghost btn-icon" title="Hapus" onClick={()=>{
+                        if (confirm('Hapus invoice ' + inv.id + '?')) onDelete && onDelete(inv.id);
+                      }}><Icon name="trash" size={14}/></button>
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -93,15 +101,27 @@ function fmtDate(s){
 }
 
 // ===== Create Invoice (interactive) =====
-function CreateInvoice({ onCancel, onSave, invoices }) {
+function CreateInvoice({ onCancel, onSave, invoices, editInvoice }) {
   const { fmtIDR, products, categories, nextInvNo } = KPO;
   const list = invoices || KPO.invoices || [];
-  const [customer, setCustomer] = useStateInv({ nama:'', perusahaan:'', wa:'', alamat:'' });
-  const [items, setItems] = useStateInv([]);
-  const [ongkir, setOngkir] = useStateInv(0);
-  const [biayaTambahan, setBiayaTambahan] = useStateInv(0);
-  const [catatan, setCatatan] = useStateInv('');
-  const [prefix, setPrefix] = useStateInv('SPC');
+  const isEdit = !!editInvoice;
+
+  const inferPrefix = (id) => {
+    const m = /^ID\/([A-Z]+)\//.exec(id || '');
+    return m ? m[1] : 'SPC';
+  };
+
+  const [customer, setCustomer] = useStateInv(editInvoice?.customer || { nama:'', perusahaan:'', wa:'', alamat:'' });
+  const [items, setItems] = useStateInv(
+    (editInvoice?.items || []).map((it, i) => ({ id: Date.now()+i, ...it, isCustom: !it.sku }))
+  );
+  const [ongkir, setOngkir] = useStateInv(editInvoice?.ongkir || 0);
+  const [biayaTambahan, setBiayaTambahan] = useStateInv(editInvoice?.biayaTambahan || 0);
+  const [catatan, setCatatan] = useStateInv(editInvoice?.catatan || '');
+  const [prefix, setPrefix] = useStateInv(editInvoice ? inferPrefix(editInvoice.id) : 'SPC');
+  const [status, setStatus] = useStateInv(editInvoice?.status || 'Belum Bayar');
+  const initDP = (editInvoice?.pembayaran || []).find(p => p.tipe === 'DP')?.jumlah || 0;
+  const [dpAmount, setDpAmount] = useStateInv(initDP);
 
   const subtotal = items.reduce((s,it)=>s+it.qty*it.harga,0);
   const total = subtotal + (+ongkir||0) + (+biayaTambahan||0);
@@ -116,12 +136,20 @@ function CreateInvoice({ onCancel, onSave, invoices }) {
   const updateItem = (id, patch) => setItems(items.map(it => it.id===id?{...it,...patch}:it));
   const removeItem = (id) => setItems(items.filter(it=>it.id!==id));
 
-  const invNo = nextInvNo(prefix, list);
+  const invNo = isEdit ? editInvoice.id : nextInvNo(prefix, list);
+
+  const buildPembayaran = () => {
+    const today = new Date().toISOString().slice(0,10);
+    if (status === 'Lunas') return [{ tipe: 'Lunas', jumlah: total, tgl: today }];
+    if (status === 'DP')    return [{ tipe: 'DP',    jumlah: Math.min(+dpAmount || 0, total), tgl: today }];
+    return [];
+  };
 
   const submit = () => {
     if (!customer.nama.trim()) { alert('Nama customer wajib diisi.'); return; }
     if (items.length === 0) { alert('Tambahkan minimal 1 produk.'); return; }
-    onSave({ customer, items, ongkir, biayaTambahan, catatan, invNo, total, prefix });
+    if (status === 'DP' && (+dpAmount || 0) <= 0) { alert('Masukkan jumlah DP.'); return; }
+    onSave({ customer, items, ongkir, biayaTambahan, catatan, invNo, total, prefix, status, pembayaran: buildPembayaran(), isEdit });
   };
 
   return (
@@ -231,11 +259,32 @@ function CreateInvoice({ onCancel, onSave, invoices }) {
           <div className="card-body" style={{display:'flex',flexDirection:'column',gap:10}}>
             <div className="field">
               <label className="field-label">Kategori dominan</label>
-              <select className="select" value={prefix} onChange={e=>setPrefix(e.target.value)}>
+              <select className="select" value={prefix} onChange={e=>setPrefix(e.target.value)} disabled={isEdit}>
                 <option>PLINT</option><option>PARQUET</option><option>SPC</option><option>VINYL</option>
               </select>
             </div>
-            <div style={{fontSize:11,color:'var(--ink-mute)'}}>No. invoice akan menjadi <span className="num" style={{color:'var(--ink)'}}>{invNo}</span></div>
+            <div style={{fontSize:11,color:'var(--ink-mute)'}}>No. invoice {isEdit?'':'akan menjadi'} <span className="num" style={{color:'var(--ink)'}}>{invNo}</span></div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header"><div className="card-title">Status Pembayaran</div></div>
+          <div className="card-body" style={{display:'flex',flexDirection:'column',gap:10}}>
+            <div className="seg" style={{width:'100%'}}>
+              {['Belum Bayar','DP','Lunas'].map(s => (
+                <button key={s} className={status===s?'active':''} style={{flex:1}} onClick={()=>setStatus(s)}>{s}</button>
+              ))}
+            </div>
+            {status === 'DP' && (
+              <div className="field">
+                <label className="field-label">Jumlah DP</label>
+                <input className="input num" type="number" value={dpAmount} onChange={e=>setDpAmount(+e.target.value||0)} style={{textAlign:'right'}} placeholder="0"/>
+                <div style={{fontSize:11,color:'var(--ink-mute)'}}>Sisa: <span className="num" style={{color:'var(--ink)'}}>{fmtIDR(Math.max(0, total - (+dpAmount||0)))}</span></div>
+              </div>
+            )}
+            {status === 'Lunas' && (
+              <div style={{fontSize:11,color:'var(--positive)'}}>Tercatat lunas sebesar {fmtIDR(total)}.</div>
+            )}
           </div>
         </div>
 
@@ -265,7 +314,7 @@ function CreateInvoice({ onCancel, onSave, invoices }) {
         <div style={{display:'flex',gap:8}}>
           <button className="btn" style={{flex:1}} onClick={onCancel}>Batal</button>
           <button className="btn btn-primary" style={{flex:2}} onClick={submit}>
-            <Icon name="check" size={14}/> Simpan invoice
+            <Icon name="check" size={14}/> {isEdit ? 'Update invoice' : 'Simpan invoice'}
           </button>
         </div>
 

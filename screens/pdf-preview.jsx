@@ -369,41 +369,25 @@ function PdfPreviewModal({ inv, brand, onClose }) {
 
   return (
     <div className="scrim" onClick={(e)=>{ if(e.target.classList.contains('scrim')) onClose(); }}>
-      <div className="modal" style={{width:880,height:'92vh',gridTemplateColumns:'1fr 280px',display:'grid'}}>
-        {/* Preview side */}
-        <div style={{padding:'18px 24px',overflow:'auto',background:'var(--bg-inset)',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-          <div style={{display:'flex',alignItems:'center',width:'100%',marginBottom:4}}>
-            <div>
-              <div className="card-sub">Pratinjau PDF · A4</div>
-              <div className="font-serif" style={{fontSize:18}}>{inv.invNo}</div>
-            </div>
-            <div style={{marginLeft:'auto',display:'flex',gap:6}}>
-              <button className="btn btn-sm"><Icon name="download" size={13}/> Download PDF</button>
-              <button className="btn btn-sm"><Icon name="share" size={13}/> Bagikan</button>
-              <button className="btn btn-icon btn-ghost" onClick={onClose}><Icon name="close" size={14}/></button>
-            </div>
+      <div className="modal" style={{width:720,height:'92vh',display:'flex',flexDirection:'column'}}>
+        <div style={{padding:'14px 18px',borderBottom:'1px solid var(--line)',display:'flex',alignItems:'center',gap:10}}>
+          <div>
+            <div className="card-sub">Pratinjau PDF · A4</div>
+            <div className="font-serif" style={{fontSize:18}}>{inv.invNo}</div>
           </div>
-          <Template inv={inv} comp={comp} brand={brand}/>
+          <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+            <button className="btn btn-sm" onClick={()=>window.print()}><Icon name="download" size={13}/> Download / Print</button>
+            <button className="btn btn-sm" onClick={async ()=>{
+              try {
+                if (navigator.share) await navigator.share({ title: inv.invNo, text: 'Invoice ' + inv.invNo, url: location.href });
+                else { await navigator.clipboard.writeText(location.href); alert('Link tersalin.'); }
+              } catch {}
+            }}><Icon name="share" size={13}/> Bagikan</button>
+            <button className="btn btn-icon btn-ghost" onClick={onClose}><Icon name="close" size={14}/></button>
+          </div>
         </div>
-
-        {/* Controls */}
-        <div style={{borderLeft:'1px solid var(--line)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-          <div style={{padding:'16px 18px',borderBottom:'1px solid var(--line)'}}>
-            <div style={{fontSize:11,color:'var(--ink-mute)',letterSpacing:'0.14em',textTransform:'uppercase'}}>Invoice</div>
-            <div style={{fontFamily:"'Instrument Serif', serif",fontSize:18,marginTop:2}}>Detail & Tanda Tangan</div>
-          </div>
-
-          <div style={{padding:14,overflow:'auto',display:'flex',flexDirection:'column',gap:10}}>
-            <div style={{fontSize:11,color:'var(--ink-mute)',letterSpacing:'0.14em',textTransform:'uppercase'}}>Tanda Tangan</div>
-            <div style={{background:'#fff',border:'1px solid var(--line)',borderRadius:6,padding:'10px 12px',display:'flex',alignItems:'center',gap:10}}>
-              {brand.signatureImg ? <img src={brand.signatureImg} style={{height:38,maxWidth:120}}/> : <span style={{fontSize:11,color:'#999'}}>(belum diatur)</span>}
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:11,color:'#333',fontWeight:500}}>{brand.directorName}</div>
-                <div style={{fontSize:10,color:'#888'}}>Direktur</div>
-              </div>
-            </div>
-            <div style={{fontSize:10.5,color:'var(--ink-mute)',lineHeight:1.5}}>Tanda tangan paten dari Settings. Untuk mengganti, buka <b style={{color:'var(--ink)'}}>Pengaturan → Tanda Tangan</b>.</div>
-          </div>
+        <div style={{flex:1,padding:'18px 24px',overflow:'auto',background:'var(--bg-inset)',display:'flex',flexDirection:'column',alignItems:'center'}}>
+          <Template inv={inv} comp={comp} brand={brand}/>
         </div>
       </div>
     </div>

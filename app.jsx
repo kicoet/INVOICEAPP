@@ -36,6 +36,7 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pdfFor, setPdfFor] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [brand, setBrand] = usePersistedCollection('brand', KPO.defaultBrand);
   const [invoices, setInvoices] = usePersistedCollection('invoices', []);
@@ -76,7 +77,7 @@ function App() {
 
   const titles = {
     dashboard: { crumb:'Owner · Beranda', title:'Dashboard' },
-    invoices:  { crumb:'Operasional', title: creating ? 'Buat Invoice Baru' : 'Invoice' },
+    invoices:  { crumb:'Operasional', title: creating ? (editingInvoice ? 'Edit Invoice' : 'Buat Invoice Baru') : 'Invoice' },
     'edit-template': { crumb:'Operasional', title:'Edit Template Invoice' },
     products:  { crumb:'Katalog', title:'Produk' },
     stock:     { crumb:'Operasional', title:'Stock & Inventory' },
@@ -152,40 +153,51 @@ function App() {
 
         <div className="content">
           {route==='dashboard' && <Dashboard/>}
-          {route==='invoices' && !creating && <InvoicesScreen invoices={invoices} goCreate={()=>setCreating(true)} goView={(id)=>{
+          {route==='invoices' && !creating && <InvoicesScreen invoices={invoices} goCreate={()=>{ setEditingInvoice(null); setCreating(true); }} goView={(id)=>{
             const inv = invoices.find(x=>x.id===id);
             if (!inv) return;
             const total = inv.items.reduce((s,it)=>s+it.qty*it.harga,0) + (inv.ongkir||0) + (inv.biayaTambahan||0);
             const due = new Date(inv.tgl); due.setDate(due.getDate()+14);
             setPdfFor({ invNo: inv.id, customer: inv.customer, items: inv.items, ongkir: inv.ongkir, biayaTambahan: inv.biayaTambahan, catatan: inv.catatan, total, tanggal: inv.tgl, jatuhTempo: due.toISOString().slice(0,10), pembayaran: inv.pembayaran });
+          }} goEdit={(id)=>{
+            const inv = invoices.find(x=>x.id===id);
+            if (!inv) return;
+            setEditingInvoice(inv);
+            setCreating(true);
+          }} onDelete={(id)=>{
+            setInvoices(invoices.filter(x=>x.id!==id));
+            pushToast({ title:'Invoice dihapus', body: id });
           }}/>}
           {route==='invoices' && creating && <CreateInvoice
             invoices={invoices}
-            onCancel={()=>setCreating(false)}
+            editInvoice={editingInvoice}
+            onCancel={()=>{ setCreating(false); setEditingInvoice(null); }}
             onSave={(payload)=>{
               const today = new Date();
-              const tglStr = today.toISOString().slice(0,10);
-              // Guarantee uniqueness even if user races saves
-              let invNo = payload.invNo;
-              if (invoices.some(x => x.id === invNo)) {
-                invNo = KPO.nextInvNo(payload.prefix || 'INV', invoices);
+              const tglStr = editingInvoice?.tgl || today.toISOString().slice(0,10);
+              const items = payload.items.map(it => ({ nama: it.nama, ukuran: it.ukuran || '', qty: +it.qty || 0, harga: +it.harga || 0, kategori: it.kategori, sku: it.sku }));
+
+              if (editingInvoice) {
+                const updated = { ...editingInvoice, customer: payload.customer, items, ongkir: +payload.ongkir||0, biayaTambahan: +payload.biayaTambahan||0, catatan: payload.catatan||'', status: payload.status, pembayaran: payload.pembayaran || [] };
+                setInvoices(invoices.map(x => x.id === editingInvoice.id ? updated : x));
+                pushToast({ title:'Invoice diperbarui', body: editingInvoice.id });
+              } else {
+                let invNo = payload.invNo;
+                if (invoices.some(x => x.id === invNo)) {
+                  invNo = KPO.nextInvNo(payload.prefix || 'INV', invoices);
+                }
+                const newInv = {
+                  id: invNo, tgl: tglStr, customer: payload.customer, items,
+                  ongkir: +payload.ongkir||0, biayaTambahan: +payload.biayaTambahan||0,
+                  catatan: payload.catatan||'', pembayaran: payload.pembayaran || [], status: payload.status,
+                };
+                setInvoices([newInv, ...invoices]);
+                pushToast({ title:'Invoice tersimpan', body: invNo + ' · ' + KPO.fmtIDR(payload.total) });
+                const due = new Date(today); due.setDate(due.getDate()+14);
+                setPdfFor({ ...payload, invNo, tanggal: tglStr, jatuhTempo: due.toISOString().slice(0,10) });
               }
-              const newInv = {
-                id: invNo,
-                tgl: tglStr,
-                customer: payload.customer,
-                items: payload.items.map(it => ({ nama: it.nama, ukuran: it.ukuran || '', qty: +it.qty || 0, harga: +it.harga || 0, kategori: it.kategori })),
-                ongkir: +payload.ongkir || 0,
-                biayaTambahan: +payload.biayaTambahan || 0,
-                catatan: payload.catatan || '',
-                pembayaran: [],
-                status: 'Belum Bayar',
-              };
-              setInvoices([newInv, ...invoices]);
               setCreating(false);
-              pushToast({ title:'Invoice tersimpan', body: invNo + ' · ' + KPO.fmtIDR(payload.total) });
-              const due = new Date(today); due.setDate(due.getDate()+14);
-              setPdfFor({ ...payload, invNo, tanggal: tglStr, jatuhTempo: due.toISOString().slice(0,10), pembayaran: [] });
+              setEditingInvoice(null);
             }}/>}
           {route==='edit-template' && <EditTemplateScreen brand={brand} setBrand={setBrand} pushToast={pushToast}/>}
           {route==='products' && <ProductsScreen/>}
