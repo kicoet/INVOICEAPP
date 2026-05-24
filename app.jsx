@@ -79,7 +79,7 @@ function App() {
   const [brand, setBrand] = usePersistedCollection('brand', KPO.defaultBrand);
   const [invoices, setInvoices] = usePersistedCollection('invoices', []);
   const [customers, setCustomers] = usePersistedCollection('customers', []);
-  const [products, setProducts] = usePersistedCollection('products', KPO.products);
+  const [products, setProducts] = usePersistedCollection('products', KPO.defaultProducts);
   const [stockHistory, setStockHistory] = usePersistedCollection('stockHistory', []);
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 

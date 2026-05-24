@@ -130,7 +130,7 @@ const KPO = (() => {
     fmtIDR, categories, products, customers, invoices,
     computeInvoice, tasks, notifs,
     omzet30, perKategori, topProducts, topCustomers,
-    defaultBrand, nextInvNo,
+    defaultBrand, defaultProducts, nextInvNo,
     loadCollection, saveCollection,
     authenticate, users,
   };
