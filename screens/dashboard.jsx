@@ -16,9 +16,9 @@ function Dashboard() {
   const data = omzet30.slice(range==='7d'?-7:range==='14d'?-14:0);
   const total30 = omzet30.reduce((s,d)=>s+d.v,0);
   const totalRange = data.reduce((s,d)=>s+d.v,0);
-  const totalInv = invoices.length;
+  const totalInv = (invoices || []).length;
   const totalLaba = Math.round(totalRange * 0.34);
-  const omzetHari = data[data.length-1].v;
+  const omzetHari = data.length ? data[data.length-1].v : 0;
 
   const kpis = [
     { label: 'Omzet hari ini',  raw: omzetHari, delta: '+12.4%', spark: data.slice(-7).map(d=>d.v) },
