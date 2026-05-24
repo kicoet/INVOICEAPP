@@ -19,7 +19,14 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 //       - If cloud empty but local has data → migrate local UP to cloud
 //   - After first sync, every change → localStorage + Supabase
 function usePersistedCollection(key, initial) {
-  const [val, setVal] = useState(() => KPO.loadCollection(key, initial));
+  const [val, setVal] = useState(() => {
+    const cached = KPO.loadCollection(key, initial);
+    const cachedEmpty = Array.isArray(cached) && cached.length === 0;
+    const seedHasData = Array.isArray(initial) ? initial.length > 0 : !!initial;
+    // If our cache is an empty array but the seed has data (e.g. product catalog),
+    // render the seed immediately to avoid a flash of empty state on first paint.
+    return (cachedEmpty && seedHasData) ? initial : cached;
+  });
   const [loaded, setLoaded] = useState(false);
 
   // initial cloud fetch — only once per key
