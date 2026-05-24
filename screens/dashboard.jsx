@@ -16,11 +16,12 @@ function Dashboard({ invoices: invoicesProp, products: productsProp, customers: 
   };
 
   // ---- Real stats derived from invoices ----
-  const today = new Date();
-  const startOf = (daysAgo) => {
-    const d = new Date(today); d.setHours(0,0,0,0); d.setDate(d.getDate() - daysAgo); return d;
-  };
-  const totalsByDay = {}; // ISO date → omzet
+  // Date keys are UTC ISO YYYY-MM-DD to match how invoices are saved
+  // (onSave uses today.toISOString().slice(0,10)).
+  const now = new Date();
+  const todayKey = now.toISOString().slice(0,10);
+  const todayUTC = new Date(todayKey + 'T00:00:00Z');
+  const totalsByDay = {}; // UTC ISO date → omzet
   let totalOmzet = 0, totalLaba = 0, piutangTerbuka = 0;
   const omzetByKategori = {};   // id → total
   const omzetByProduct = {};    // nama → { qty, omzet }
@@ -51,12 +52,13 @@ function Dashboard({ invoices: invoicesProp, products: productsProp, customers: 
 
   const days = range === '7d' ? 7 : range === '14d' ? 14 : 30;
   const data = Array.from({ length: days }).map((_, i) => {
-    const d = new Date(today); d.setHours(0,0,0,0); d.setDate(d.getDate() - (days - 1 - i));
+    const d = new Date(todayUTC);
+    d.setUTCDate(d.getUTCDate() - (days - 1 - i));
     const key = d.toISOString().slice(0,10);
     return { d: key, v: totalsByDay[key] || 0 };
   });
   const totalRange = data.reduce((s,d)=>s+d.v,0);
-  const omzetHari = totalsByDay[today.toISOString().slice(0,10)] || 0;
+  const omzetHari = totalsByDay[todayKey] || 0;
   const omzetMinggu = data.slice(-7).reduce((s,d)=>s+d.v,0);
   const omzetBulan = data.reduce((s,d)=>s+d.v,0);
 
