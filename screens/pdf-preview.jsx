@@ -370,18 +370,21 @@ async function buildPdfBlob() {
   const snap = (node, props) => props.map(p => [p, node.style[p]]);
   const restore = (node, snapped) => snapped.forEach(([p, v]) => { node.style[p] = v; });
 
-  const elSnap = snap(el, ['transform','position','top','left','zoom','width','minHeight','maxWidth']);
+  const elSnap = snap(el, ['transform','position','top','left','zoom','width','height','minHeight','maxWidth','overflow']);
   const shellSnap = shell ? snap(shell, ['height','overflow','width','maxWidth','position']) : [];
 
-  // Force native A4-ish render dimensions before html2canvas takes the snapshot.
+  // Force native A4 render dimensions before html2canvas takes the snapshot.
+  // 760×1075 px = exactly the A4 aspect ratio (210mm × 297mm).
   el.style.transform = 'none';
   el.style.position = 'static';
   el.style.top = 'auto';
   el.style.left = 'auto';
   el.style.zoom = '1';
   el.style.width = '760px';
+  el.style.height = '1075px';      // hard cap → no overflow, no page 2
   el.style.minHeight = '1075px';
   el.style.maxWidth = 'none';
+  el.style.overflow = 'hidden';
   if (shell) {
     shell.style.height = 'auto';
     shell.style.overflow = 'visible';
@@ -394,15 +397,8 @@ async function buildPdfBlob() {
     return await window.html2pdf().set({
       margin: 0,
       image: { type: 'jpeg', quality: 0.97 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        width: 760,
-        windowWidth: 760,
-      },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css'] },
     }).from(el).outputPdf('blob');
   } finally {
     restore(el, elSnap);
