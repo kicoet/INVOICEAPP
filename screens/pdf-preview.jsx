@@ -364,17 +364,48 @@ function pdfFilename(inv) {
 async function buildPdfBlob() {
   const el = document.querySelector('.pdf-page');
   if (!el || !window.html2pdf) return null;
-  const prevZoom = el.style.zoom;
-  el.style.zoom = '1'; // render at native scale, ignore mobile preview zoom
+  const shell = el.closest('.pdf-shell');
+
+  // Snapshot inline styles so we can restore exactly after capture.
+  const snap = (node, props) => props.map(p => [p, node.style[p]]);
+  const restore = (node, snapped) => snapped.forEach(([p, v]) => { node.style[p] = v; });
+
+  const elSnap = snap(el, ['transform','position','top','left','zoom','width','minHeight','maxWidth']);
+  const shellSnap = shell ? snap(shell, ['height','overflow','width','maxWidth','position']) : [];
+
+  // Force native A4-ish render dimensions before html2canvas takes the snapshot.
+  el.style.transform = 'none';
+  el.style.position = 'static';
+  el.style.top = 'auto';
+  el.style.left = 'auto';
+  el.style.zoom = '1';
+  el.style.width = '760px';
+  el.style.minHeight = '1075px';
+  el.style.maxWidth = 'none';
+  if (shell) {
+    shell.style.height = 'auto';
+    shell.style.overflow = 'visible';
+    shell.style.width = '760px';
+    shell.style.maxWidth = 'none';
+    shell.style.position = 'static';
+  }
+
   try {
     return await window.html2pdf().set({
       margin: 0,
       image: { type: 'jpeg', quality: 0.97 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        width: 760,
+        windowWidth: 760,
+      },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
     }).from(el).outputPdf('blob');
   } finally {
-    el.style.zoom = prevZoom;
+    restore(el, elSnap);
+    if (shell) restore(shell, shellSnap);
   }
 }
 async function downloadPdf(inv) {
