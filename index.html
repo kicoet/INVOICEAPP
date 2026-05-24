@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0a0a0a"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Kemala"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="description" content="Kemala Profile Office — Sistem invoice, stock, task & sales untuk perusahaan interior."/>
+  <title>Kemala Profile Office</title>
+
+  <link rel="manifest" href="manifest.webmanifest"/>
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg"/>
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <link rel="stylesheet" href="styles.css"/>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Data + helpers -->
+  <script src="data.js"></script>
+
+  <!-- Components (Babel transpiled) -->
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="charts.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+
+  <script type="text/babel" src="screens/dashboard.jsx"></script>
+  <script type="text/babel" src="screens/invoices.jsx"></script>
+  <script type="text/babel" src="screens/pdf-kemala.jsx"></script>
+  <script type="text/babel" src="screens/pdf-preview.jsx"></script>
+  <script type="text/babel" src="screens/edit-template.jsx"></script>
+  <script type="text/babel" src="screens/products-stock.jsx"></script>
+  <script type="text/babel" src="screens/tasks.jsx"></script>
+  <script type="text/babel" src="screens/misc.jsx"></script>
+
+  <script type="text/babel" src="app.jsx"></script>
+
+  <!-- PWA Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(()=>{});
+      });
+    }
+  </script>
+</body>
+</html>
