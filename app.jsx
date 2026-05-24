@@ -7,10 +7,41 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "showSpark": true
 }/*EDITMODE-END*/;
 
-// Persistent collection hook — syncs a state slice to localStorage and
-// keeps KPO.<key> in sync so existing screens that read KPO.* see fresh data.
+// Persistent collection hook — three-layer sync:
+//   1) localStorage (instant, offline-safe cache)
+//   2) Supabase (source of truth, multi-device)
+//   3) KPO.<key> (kept in sync so screens that read KPO.* see fresh data)
+//
+// Boot flow per key:
+//   - Render immediately from localStorage cache (no spinner)
+//   - In background fetch from Supabase
+//       - If cloud has data → adopt it (cloud wins)
+//       - If cloud empty but local has data → migrate local UP to cloud
+//   - After first sync, every change → localStorage + Supabase
 function usePersistedCollection(key, initial) {
   const [val, setVal] = useState(() => KPO.loadCollection(key, initial));
+  const [loaded, setLoaded] = useState(false);
+
+  // initial cloud fetch — only once per key
+  useEffect(() => {
+    let cancelled = false;
+    if (!window.DB || !window.DB.isConfigured) { setLoaded(true); return; }
+    window.DB.get(key).then(remote => {
+      if (cancelled) return;
+      if (remote !== null && remote !== undefined) {
+        setVal(remote);
+      } else {
+        // cloud empty — push local up if we have something meaningful
+        const isEmpty = Array.isArray(val) ? val.length === 0 : !val;
+        if (!isEmpty) window.DB.set(key, val);
+      }
+      setLoaded(true);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line
+  }, [key]);
+
+  // mirror to localStorage + KPO + cloud
   useEffect(() => {
     KPO.saveCollection(key, val);
     if (KPO[key] && Array.isArray(KPO[key])) {
@@ -19,7 +50,11 @@ function usePersistedCollection(key, initial) {
     } else {
       KPO[key] = val;
     }
-  }, [key, val]);
+    if (loaded && window.DB && window.DB.isConfigured) {
+      window.DB.set(key, val);
+    }
+  }, [key, val, loaded]);
+
   return [val, setVal];
 }
 

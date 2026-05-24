@@ -1,10 +1,11 @@
 // Kemala Profile Office — Service Worker
-const CACHE = 'kemala-v1';
+const CACHE = 'kemala-v2';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './data.js',
+  './supabase-config.js',
   './icons.jsx',
   './charts.jsx',
   './tweaks-panel.jsx',
