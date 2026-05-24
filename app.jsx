@@ -28,12 +28,15 @@ function usePersistedCollection(key, initial) {
     if (!window.DB || !window.DB.isConfigured) { setLoaded(true); return; }
     window.DB.get(key).then(remote => {
       if (cancelled) return;
-      if (remote !== null && remote !== undefined) {
+      const remoteIsEmpty = remote == null || (Array.isArray(remote) && remote.length === 0);
+      const seedHasData   = Array.isArray(initial) ? initial.length > 0 : !!initial;
+      if (remoteIsEmpty && seedHasData) {
+        // Cloud empty/missing but we have a seed catalog (e.g. products) → seed wins,
+        // push it up so all devices share the same defaults.
+        window.DB.set(key, initial);
+        setVal(initial);
+      } else if (remote !== null && remote !== undefined) {
         setVal(remote);
-      } else {
-        // cloud empty — push local up if we have something meaningful
-        const isEmpty = Array.isArray(val) ? val.length === 0 : !val;
-        if (!isEmpty) window.DB.set(key, val);
       }
       setLoaded(true);
     });
