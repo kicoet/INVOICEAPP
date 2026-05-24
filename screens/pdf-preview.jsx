@@ -361,45 +361,49 @@ function PdfEditorial({ inv, comp, brand }) {
 function pdfFilename(inv) {
   return (inv.invNo || 'invoice').replace(/[\/\\:*?"<>|]/g, '-') + '.pdf';
 }
+// Direct html2canvas → jsPDF pipeline (more reliable than html2pdf wrapper).
+// We render the element at fixed 760×1075px (exactly A4 ratio), capture it,
+// then place the image to fill an A4 Portrait page edge-to-edge in 1 page.
 async function buildPdfBlob() {
   const el = document.querySelector('.pdf-page');
-  if (!el || !window.html2pdf) return null;
+  if (!el || !window.html2canvas || !window.jspdf) return null;
   const shell = el.closest('.pdf-shell');
 
-  // Snapshot inline styles so we can restore exactly after capture.
   const snap = (node, props) => props.map(p => [p, node.style[p]]);
   const restore = (node, snapped) => snapped.forEach(([p, v]) => { node.style[p] = v; });
 
-  const elSnap = snap(el, ['transform','position','top','left','zoom','width','height','minHeight','maxWidth','overflow']);
+  const elSnap = snap(el, ['transform','position','top','left','zoom','width','height','minHeight','maxWidth','overflow','boxShadow']);
   const shellSnap = shell ? snap(shell, ['height','overflow','width','maxWidth','position']) : [];
 
-  // Force native A4 render dimensions before html2canvas takes the snapshot.
-  // 760×1075 px = exactly the A4 aspect ratio (210mm × 297mm).
-  el.style.transform = 'none';
-  el.style.position = 'static';
-  el.style.top = 'auto';
-  el.style.left = 'auto';
-  el.style.zoom = '1';
-  el.style.width = '760px';
-  el.style.height = '1075px';      // hard cap → no overflow, no page 2
-  el.style.minHeight = '1075px';
-  el.style.maxWidth = 'none';
-  el.style.overflow = 'hidden';
-  if (shell) {
-    shell.style.height = 'auto';
-    shell.style.overflow = 'visible';
-    shell.style.width = '760px';
-    shell.style.maxWidth = 'none';
-    shell.style.position = 'static';
-  }
+  // Hard-lock element to exact A4 ratio at native pixel size.
+  Object.assign(el.style, {
+    transform: 'none', position: 'static', top: 'auto', left: 'auto',
+    zoom: '1', width: '760px', height: '1075px', minHeight: '1075px',
+    maxWidth: 'none', overflow: 'hidden', boxShadow: 'none',
+  });
+  if (shell) Object.assign(shell.style, {
+    height: 'auto', overflow: 'visible', width: '760px', maxWidth: 'none', position: 'static',
+  });
 
   try {
-    return await window.html2pdf().set({
-      margin: 0,
-      image: { type: 'jpeg', quality: 0.97 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    }).from(el).outputPdf('blob');
+    // Capture at scale 2 for retina-sharp output.
+    const canvas = await window.html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      width: 760,
+      height: 1075,
+      windowWidth: 760,
+      windowHeight: 1075,
+      scrollX: 0,
+      scrollY: 0,
+    });
+    const imgData = canvas.toDataURL('image/jpeg', 0.97);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    // A4 = 210mm × 297mm. Fill full page.
+    pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+    return pdf.output('blob');
   } finally {
     restore(el, elSnap);
     if (shell) restore(shell, shellSnap);
