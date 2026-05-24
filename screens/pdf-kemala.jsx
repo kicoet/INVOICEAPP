@@ -72,10 +72,10 @@ function PdfKemala({ inv, comp, brand }) {
           <div style={{ textAlign: 'right', minWidth: 240 }}>
             <div style={{ fontSize: 24, fontWeight: 700, color: '#1c1c1c', letterSpacing: '0.01em' }}>TAGIHAN / INVOICE</div>
             <div style={{ marginTop: 10, display: 'inline-block', background: orange, color: '#fff', padding: '5px 14px', borderRadius: 5, fontWeight: 600, fontFamily: "'Geist Mono', monospace", fontSize: 11, letterSpacing: '0.04em' }}>{inv.invNo}</div>
-            <div style={{ marginTop: 12, display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', fontSize: 11, color: '#3a3a3a', lineHeight: 1.8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ marginTop: 12, fontSize: 11, color: '#3a3a3a', lineHeight: 1.8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                 <CalIcon color={orange} />
-                <span style={{ minWidth: 78 }}>Tanggal</span>
+                <span>Tanggal</span>
                 <span style={{ color: '#aaa' }}>:</span>
                 <span className="num">{fmtTgl(inv.tanggal)}</span>
               </div>
