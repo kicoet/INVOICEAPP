@@ -35,6 +35,7 @@ const Icon = ({ name, size = 16, className = '' }) => {
     logo: <><path d="M4 4l16 16M20 4L4 20" {...stroke}/></>,
     arrowRight: <><path d="M5 12h14M13 6l6 6-6 6" {...stroke}/></>,
     menu: <><path d="M4 6h16M4 12h16M4 18h16" {...stroke}/></>,
+    refresh: <><path d="M3 12a9 9 0 0115.36-6.36L21 8M21 3v5h-5" {...stroke}/><path d="M21 12a9 9 0 01-15.36 6.36L3 16M3 21v-5h5" {...stroke}/></>,
   };
   return (
     <svg className={className} width={s} height={s} viewBox="0 0 24 24" aria-hidden="true">{paths[name] || null}</svg>

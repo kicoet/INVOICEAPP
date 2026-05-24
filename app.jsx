@@ -18,40 +18,41 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 //       - If cloud has data → adopt it (cloud wins)
 //       - If cloud empty but local has data → migrate local UP to cloud
 //   - After first sync, every change → localStorage + Supabase
-function usePersistedCollection(key, initial) {
+function usePersistedCollection(key, initial, revision = 0) {
   const [val, setVal] = useState(() => {
     const cached = KPO.loadCollection(key, initial);
     const cachedEmpty = Array.isArray(cached) && cached.length === 0;
     const seedHasData = Array.isArray(initial) ? initial.length > 0 : !!initial;
-    // If our cache is an empty array but the seed has data (e.g. product catalog),
-    // render the seed immediately to avoid a flash of empty state on first paint.
     return (cachedEmpty && seedHasData) ? initial : cached;
   });
   const [loaded, setLoaded] = useState(false);
+  const lastWriteRef = React.useRef(0);
 
-  // initial cloud fetch — only once per key
+  // Cloud fetch — runs on mount + every time `revision` bumps (manual refresh / focus / polling)
   useEffect(() => {
     let cancelled = false;
     if (!window.DB || !window.DB.isConfigured) { setLoaded(true); return; }
+    // Skip cloud fetch if we just wrote (within 1.5s) — avoids round-tripping our own change
+    if (Date.now() - lastWriteRef.current < 1500 && revision > 0) return;
     window.DB.get(key).then(remote => {
       if (cancelled) return;
       const remoteIsEmpty = remote == null || (Array.isArray(remote) && remote.length === 0);
       const seedHasData   = Array.isArray(initial) ? initial.length > 0 : !!initial;
       if (remoteIsEmpty && seedHasData) {
-        // Cloud empty/missing but we have a seed catalog (e.g. products) → seed wins,
-        // push it up so all devices share the same defaults.
         window.DB.set(key, initial);
         setVal(initial);
       } else if (remote !== null && remote !== undefined) {
-        setVal(remote);
+        // Only update if remote differs from current val (avoid unnecessary re-renders)
+        const remoteStr = JSON.stringify(remote);
+        setVal(prev => JSON.stringify(prev) === remoteStr ? prev : remote);
       }
       setLoaded(true);
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line
-  }, [key]);
+  }, [key, revision]);
 
-  // mirror to localStorage + KPO + cloud
+  // Mirror local changes to localStorage + KPO + cloud
   useEffect(() => {
     KPO.saveCollection(key, val);
     if (KPO[key] && Array.isArray(KPO[key])) {
@@ -61,6 +62,7 @@ function usePersistedCollection(key, initial) {
       KPO[key] = val;
     }
     if (loaded && window.DB && window.DB.isConfigured) {
+      lastWriteRef.current = Date.now();
       window.DB.set(key, val);
     }
   }, [key, val, loaded]);
@@ -83,11 +85,35 @@ function App() {
   const [creating, setCreating] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [toasts, setToasts] = useState([]);
-  const [brand, setBrand] = usePersistedCollection('brand', KPO.defaultBrand);
-  const [invoices, setInvoices] = usePersistedCollection('invoices', []);
-  const [customers, setCustomers] = usePersistedCollection('customers', []);
-  const [products, setProducts] = usePersistedCollection('products', KPO.defaultProducts);
-  const [stockHistory, setStockHistory] = usePersistedCollection('stockHistory', []);
+  const [revision, setRevision] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const refreshAll = useCallback(() => {
+    setSyncing(true);
+    setRevision(r => r + 1);
+    setTimeout(() => setSyncing(false), 900);
+  }, []);
+
+  // Auto-refetch when app returns to foreground (PWA)
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshAll(); };
+    window.addEventListener('focus', refreshAll);
+    document.addEventListener('visibilitychange', onVisible);
+    // Light polling every 20s while tab is visible
+    const poll = setInterval(() => {
+      if (document.visibilityState === 'visible') setRevision(r => r + 1);
+    }, 20000);
+    return () => {
+      window.removeEventListener('focus', refreshAll);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(poll);
+    };
+  }, [refreshAll]);
+
+  const [brand, setBrand] = usePersistedCollection('brand', KPO.defaultBrand, revision);
+  const [invoices, setInvoices] = usePersistedCollection('invoices', [], revision);
+  const [customers, setCustomers] = usePersistedCollection('customers', [], revision);
+  const [products, setProducts] = usePersistedCollection('products', KPO.defaultProducts, revision);
+  const [stockHistory, setStockHistory] = usePersistedCollection('stockHistory', [], revision);
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   useEffect(() => {
@@ -194,6 +220,11 @@ function App() {
               <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--ink-dim)'}}><Icon name="search" size={14}/></span>
               <span style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',fontSize:10,color:'var(--ink-dim)',border:'1px solid var(--line)',borderRadius:3,padding:'1px 5px'}} className="num">⌘K</span>
             </div>
+            <button className="btn btn-icon btn-ghost" title="Refresh data" onClick={refreshAll} style={{position:'relative'}}>
+              <span style={{display:'inline-block', animation: syncing ? 'spin 0.9s linear infinite' : 'none'}}>
+                <Icon name="refresh" size={15}/>
+              </span>
+            </button>
             <button className="btn btn-icon btn-ghost" onClick={()=>setRoute('notifs')}><Icon name="bell" size={15}/></button>
             <button className="btn btn-primary" onClick={()=>{ setRoute('invoices'); setCreating(true); }}><Icon name="plus" size={14}/> Buat Invoice</button>
           </div>
