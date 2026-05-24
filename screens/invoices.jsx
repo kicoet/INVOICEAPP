@@ -101,8 +101,10 @@ function fmtDate(s){
 }
 
 // ===== Create Invoice (interactive) =====
-function CreateInvoice({ onCancel, onSave, invoices, editInvoice }) {
-  const { fmtIDR, products, categories, nextInvNo } = KPO;
+function CreateInvoice({ onCancel, onSave, invoices, editInvoice, customers: customersProp, products: productsProp }) {
+  const { fmtIDR, categories, nextInvNo } = KPO;
+  const products = productsProp || KPO.products;
+  const customers = customersProp || KPO.customers || [];
   const list = invoices || KPO.invoices || [];
   const isEdit = !!editInvoice;
 
@@ -164,7 +166,23 @@ function CreateInvoice({ onCancel, onSave, invoices, editInvoice }) {
               <span className="num" style={{fontSize:13}}>{invNo}</span>
             </div>
           </div>
-          <div className="card-body" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+          <div className="card-body" style={{display:'flex',flexDirection:'column',gap:14}}>
+            {customers.length > 0 && (
+              <div className="field">
+                <label className="field-label">Pilih customer tersimpan <span style={{textTransform:'none',color:'var(--ink-dim)'}}>(opsional)</span></label>
+                <select className="select" value="" onChange={e=>{
+                  if (!e.target.value) return;
+                  const c = customers.find(x => x.id === e.target.value);
+                  if (c) setCustomer({ nama: c.nama || '', perusahaan: c.perusahaan || '', wa: c.wa || '', alamat: c.alamat || '' });
+                }}>
+                  <option value="">— Pilih customer lama atau isi manual di bawah —</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.nama}{c.perusahaan?` · ${c.perusahaan}`:''}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
             <div className="field">
               <label className="field-label">Nama customer</label>
               <input className="input" placeholder="Rendy Halim" value={customer.nama} onChange={e=>setCustomer({...customer,nama:e.target.value})}/>
@@ -180,6 +198,7 @@ function CreateInvoice({ onCancel, onSave, invoices, editInvoice }) {
             <div className="field">
               <label className="field-label">Alamat <span style={{textTransform:'none',color:'var(--ink-dim)'}}>(opsional)</span></label>
               <input className="input" placeholder="Jl. Sudirman 21, Jakarta" value={customer.alamat} onChange={e=>setCustomer({...customer,alamat:e.target.value})}/>
+            </div>
             </div>
           </div>
         </div>

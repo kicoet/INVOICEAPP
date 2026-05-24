@@ -1,8 +1,9 @@
 // ===== Products + Stock management =====
 const { useState: useStateProd } = React;
 
-function ProductsScreen() {
-  const { fmtIDR, products, categories } = KPO;
+function ProductsScreen({ products: productsProp, setProducts }) {
+  const { fmtIDR, categories } = KPO;
+  const products = productsProp || KPO.products;
   const [cat, setCat] = useStateProd('all');
   const [q, setQ] = useStateProd('');
 
@@ -72,8 +73,11 @@ function ProductsScreen() {
   );
 }
 
-function StockScreen() {
-  const { fmtIDR, products } = KPO;
+function StockScreen({ products: productsProp, setProducts, stockHistory, setStockHistory, pushToast }) {
+  const { fmtIDR } = KPO;
+  const products = productsProp || KPO.products;
+  const histories = stockHistory || [];
+  const [adding, setAdding] = useStateProd(null); // null or product obj
 
   const lowest = [...products].sort((a,b)=>a.stock-b.stock).slice(0,5);
   const valuasi = products.reduce((s,p)=>s+p.stock*p.hpp,0);
@@ -81,16 +85,23 @@ function StockScreen() {
   const habis = products.filter(p=>p.stock===0).length;
   const kritis = products.filter(p=>p.stock>0 && p.stock<30).length;
 
-  const histories = [
-    { tgl:'2026-05-22 14:24', tipe:'keluar', produk:'SPC Adaptasi', qty:24, ref:'ID/SPC/V/014', staff:'Sistem (auto)' },
-    { tgl:'2026-05-22 14:24', tipe:'keluar', produk:'SPC Transisi', qty:12, ref:'ID/SPC/V/014', staff:'Sistem (auto)' },
-    { tgl:'2026-05-22 09:10', tipe:'masuk',  produk:'Plint Laminate 10cm', qty:50, ref:'Pembelian #2026-05-22A', staff:'Owner' },
-    { tgl:'2026-05-21 16:48', tipe:'keluar', produk:'Parquet Adaptasi', qty:18, ref:'ID/PARQUET/V/011', staff:'Sistem (auto)' },
-    { tgl:'2026-05-21 16:48', tipe:'keluar', produk:'Parquet Ending',    qty:8,  ref:'ID/PARQUET/V/011', staff:'Sistem (auto)' },
-    { tgl:'2026-05-20 11:02', tipe:'masuk',  produk:'SPC Adaptasi', qty:80, ref:'Pembelian #2026-05-20A', staff:'Owner' },
-    { tgl:'2026-05-20 10:38', tipe:'keluar', produk:'Plint Laminate 10cm', qty:40, ref:'ID/PLINT/V/032', staff:'Sistem (auto)' },
-    { tgl:'2026-05-19 15:14', tipe:'keluar', produk:'Vinyl Adaptasi', qty:22, ref:'ID/VINYL/V/007', staff:'Sistem (auto)' },
-  ];
+  const addStock = ({ sku, qty, ref }) => {
+    if (!sku || !qty) return;
+    setProducts(products.map(p => p.sku === sku ? { ...p, stock: (p.stock||0) + (+qty||0) } : p));
+    const p = products.find(x => x.sku === sku);
+    const entry = {
+      tgl: new Date().toISOString().slice(0,16).replace('T',' '),
+      tipe: 'masuk',
+      produk: p?.nama || sku,
+      sku,
+      qty: +qty,
+      ref: ref || ('Pembelian #' + new Date().toISOString().slice(0,10)),
+      staff: 'Owner',
+    };
+    setStockHistory([entry, ...histories]);
+    setAdding(null);
+    pushToast && pushToast({ title: 'Stock ditambahkan', body: `${p?.nama || sku}: +${qty} batang` });
+  };
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -109,11 +120,16 @@ function StockScreen() {
               <div className="card-title">Riwayat stock</div>
               <div className="card-sub">Masuk & keluar otomatis</div>
             </div>
-            <button className="btn btn-sm" style={{marginLeft:'auto'}}><Icon name="upload" size={13}/> Stock Masuk</button>
+            <button className="btn btn-primary btn-sm" style={{marginLeft:'auto'}} onClick={()=>setAdding({ sku: products[0]?.sku || '', qty: 0, ref: '' })}><Icon name="plus" size={13}/> Tambah Stock</button>
           </div>
           <table className="tbl">
             <thead><tr><th>Tanggal</th><th>Tipe</th><th>Produk</th><th style={{textAlign:'right'}}>Qty</th><th>Referensi</th><th>Aktor</th></tr></thead>
             <tbody>
+              {histories.length === 0 && (
+                <tr><td colSpan={6} style={{padding:'40px 16px',textAlign:'center',color:'var(--ink-mute)'}}>
+                  Belum ada riwayat stock. Klik <b style={{color:'var(--ink)'}}>Tambah Stock</b> untuk mulai.
+                </td></tr>
+              )}
               {histories.map((h,i)=>(
                 <tr key={i}>
                   <td style={{color:'var(--ink-mute)'}} className="num">{h.tgl}</td>
@@ -149,6 +165,48 @@ function StockScreen() {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {adding && <AddStockModal initial={adding} products={products} onCancel={()=>setAdding(null)} onSave={addStock}/>}
+    </div>
+  );
+}
+
+function AddStockModal({ initial, products, onCancel, onSave }) {
+  const [sku, setSku] = useStateProd(initial.sku || (products[0]?.sku || ''));
+  const [qty, setQty] = useStateProd(initial.qty || 0);
+  const [ref, setRef] = useStateProd(initial.ref || '');
+  const product = products.find(p => p.sku === sku);
+  return (
+    <div className="scrim" onClick={(e)=>{ if(e.target.classList.contains('scrim')) onCancel(); }}>
+      <div className="modal" style={{width:460,padding:0,display:'flex',flexDirection:'column'}}>
+        <div style={{padding:'16px 18px',borderBottom:'1px solid var(--line)'}}>
+          <div className="card-sub">Tambah Stock Masuk</div>
+          <div className="font-serif" style={{fontSize:20}}>Pembelian / Restock</div>
+        </div>
+        <div style={{padding:18,display:'flex',flexDirection:'column',gap:12}}>
+          <div className="field"><label className="field-label">Produk</label>
+            <select className="select" value={sku} onChange={e=>setSku(e.target.value)}>
+              {products.map(p => <option key={p.sku} value={p.sku}>{p.nama} ({p.sku}) — stock {p.stock||0}</option>)}
+            </select>
+          </div>
+          <div className="field"><label className="field-label">Jumlah masuk</label>
+            <input className="input num" type="number" value={qty} autoFocus onChange={e=>setQty(+e.target.value||0)} placeholder="0"/>
+            {product && qty>0 && (
+              <div style={{fontSize:11,color:'var(--ink-mute)'}}>Stock baru: <span className="num" style={{color:'var(--ink)'}}>{(product.stock||0) + (+qty||0)} batang</span></div>
+            )}
+          </div>
+          <div className="field"><label className="field-label">Referensi <span style={{textTransform:'none',color:'var(--ink-dim)'}}>(opsional)</span></label>
+            <input className="input" value={ref} onChange={e=>setRef(e.target.value)} placeholder="No. nota pembelian, supplier, dll"/>
+          </div>
+        </div>
+        <div style={{padding:'12px 18px',borderTop:'1px solid var(--line)',display:'flex',gap:8}}>
+          <button className="btn" onClick={onCancel}>Batal</button>
+          <button className="btn btn-primary" style={{marginLeft:'auto'}} onClick={()=>{
+            if (!qty || qty <= 0) { alert('Jumlah harus lebih dari 0.'); return; }
+            onSave({ sku, qty, ref });
+          }}><Icon name="check" size={13}/> Tambah Stock</button>
         </div>
       </div>
     </div>

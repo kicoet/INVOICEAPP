@@ -39,38 +39,102 @@ function NotificationsScreen() {
   );
 }
 
-function CustomersScreen() {
-  const { customers, fmtIDR } = KPO;
+function CustomersScreen({ customers: customersProp, setCustomers, invoices }) {
+  const customers = customersProp || KPO.customers || [];
+  const invs = invoices || KPO.invoices || [];
+  const [q, setQ] = useStateMisc('');
+  const [editing, setEditing] = useStateMisc(null); // null = closed, {} = new, {id..} = edit
+  const trxCount = (c) => invs.filter(i => i.customer && i.customer.nama === c.nama && (i.customer.perusahaan||'') === (c.perusahaan||'')).length;
+  const list = customers.filter(c =>
+    !q || [c.nama, c.perusahaan, c.wa].filter(Boolean).some(s => s.toLowerCase().includes(q.toLowerCase()))
+  );
+
+  const save = (data) => {
+    if (!data.nama.trim()) { alert('Nama wajib diisi.'); return; }
+    if (data.id) {
+      setCustomers(customers.map(c => c.id === data.id ? data : c));
+    } else {
+      setCustomers([{ ...data, id: 'c' + Date.now() }, ...customers]);
+    }
+    setEditing(null);
+  };
+  const del = (id) => {
+    if (!confirm('Hapus customer ini?')) return;
+    setCustomers(customers.filter(c => c.id !== id));
+  };
+
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div className="card" style={{padding:'12px 14px',display:'flex',gap:10}}>
-        <div style={{flex:1,maxWidth:380,position:'relative'}}>
-          <input className="input" placeholder="Cari nama, perusahaan, WA…" style={{paddingLeft:30}}/>
+      <div className="card" style={{padding:'12px 14px',display:'flex',gap:10,flexWrap:'wrap'}}>
+        <div style={{flex:1,minWidth:200,maxWidth:380,position:'relative'}}>
+          <input className="input" placeholder="Cari nama, perusahaan, WA…" value={q} onChange={e=>setQ(e.target.value)} style={{paddingLeft:30}}/>
           <span style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',color:'var(--ink-dim)'}}><Icon name="search" size={13}/></span>
         </div>
-        <button className="btn btn-primary" style={{marginLeft:'auto'}}><Icon name="plus" size={14}/> Tambah Customer</button>
+        <button className="btn btn-primary" style={{marginLeft:'auto'}} onClick={()=>setEditing({ nama:'', perusahaan:'', wa:'', alamat:'' })}><Icon name="plus" size={14}/> Tambah Customer</button>
       </div>
-      <div className="grid-3">
-        {customers.map(c => (
-          <div key={c.id} className="card" style={{padding:'18px 18px'}}>
-            <div style={{display:'flex',alignItems:'center',gap:10}}>
-              <div className="avatar">{c.nama.split(' ').map(n=>n[0]).slice(0,2).join('')}</div>
-              <div>
-                <div style={{fontSize:14}}>{c.nama}</div>
-                <div style={{fontSize:11,color:'var(--ink-mute)'}}>{c.perusahaan}</div>
+
+      {list.length === 0 ? (
+        <div className="card" style={{padding:'48px 16px',textAlign:'center',color:'var(--ink-mute)'}}>
+          Belum ada customer. Klik <b style={{color:'var(--ink)'}}>Tambah Customer</b> atau tambahkan otomatis saat membuat invoice baru.
+        </div>
+      ) : (
+        <div className="grid-3">
+          {list.map(c => (
+            <div key={c.id} className="card" style={{padding:'18px 18px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <div className="avatar">{(c.nama||'?').split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase()}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14}}>{c.nama}</div>
+                  <div style={{fontSize:11,color:'var(--ink-mute)'}}>{c.perusahaan || '—'}</div>
+                </div>
+                <span className="chip">{trxCount(c)} trx</span>
+              </div>
+              <hr className="hr"/>
+              <div style={{fontSize:12,color:'var(--ink-mute)',lineHeight:1.7}}>
+                <div style={{display:'flex',gap:8}}><span style={{width:60,color:'var(--ink-dim)'}}>WA</span><span className="num">{c.wa || '—'}</span></div>
+                <div style={{display:'flex',gap:8,alignItems:'flex-start'}}><span style={{width:60,color:'var(--ink-dim)'}}>Alamat</span><span style={{flex:1}}>{c.alamat || '—'}</span></div>
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:14}}>
+                <button className="btn btn-sm" style={{flex:1}} onClick={()=>setEditing(c)}><Icon name="edit" size={12}/> Edit</button>
+                <button className="btn btn-sm" onClick={()=>del(c.id)}><Icon name="trash" size={12}/></button>
               </div>
             </div>
-            <hr className="hr"/>
-            <div style={{fontSize:12,color:'var(--ink-mute)',lineHeight:1.7}}>
-              <div style={{display:'flex',gap:8}}><span style={{width:60,color:'var(--ink-dim)'}}>WA</span><span className="num">{c.wa}</span></div>
-              <div style={{display:'flex',gap:8,alignItems:'flex-start'}}><span style={{width:60,color:'var(--ink-dim)'}}>Alamat</span><span style={{flex:1}}>{c.alamat}</span></div>
-            </div>
-            <div style={{display:'flex',gap:8,marginTop:14}}>
-              <button className="btn btn-sm" style={{flex:1}}><Icon name="invoice" size={12}/> Riwayat</button>
-              <button className="btn btn-sm" style={{flex:1}}><Icon name="plus" size={12}/> Invoice</button>
-            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && <CustomerModal initial={editing} onCancel={()=>setEditing(null)} onSave={save}/>}
+    </div>
+  );
+}
+
+function CustomerModal({ initial, onCancel, onSave }) {
+  const [c, setC] = useStateMisc(initial);
+  return (
+    <div className="scrim" onClick={(e)=>{ if(e.target.classList.contains('scrim')) onCancel(); }}>
+      <div className="modal" style={{width:460,padding:0,display:'flex',flexDirection:'column'}}>
+        <div style={{padding:'16px 18px',borderBottom:'1px solid var(--line)'}}>
+          <div className="card-sub">{c.id ? 'Edit' : 'Tambah'} Customer</div>
+          <div className="font-serif" style={{fontSize:20}}>{c.id ? c.nama : 'Customer baru'}</div>
+        </div>
+        <div style={{padding:18,display:'flex',flexDirection:'column',gap:12}}>
+          <div className="field"><label className="field-label">Nama</label>
+            <input className="input" autoFocus value={c.nama} onChange={e=>setC({...c,nama:e.target.value})} placeholder="Rendy Halim"/>
           </div>
-        ))}
+          <div className="field"><label className="field-label">Perusahaan / Perorangan</label>
+            <input className="input" value={c.perusahaan} onChange={e=>setC({...c,perusahaan:e.target.value})} placeholder="CV. Citra Interior"/>
+          </div>
+          <div className="field"><label className="field-label">Nomor WA</label>
+            <input className="input" value={c.wa} onChange={e=>setC({...c,wa:e.target.value})} placeholder="+62 812-3456-7890"/>
+          </div>
+          <div className="field"><label className="field-label">Alamat</label>
+            <textarea className="textarea" value={c.alamat} onChange={e=>setC({...c,alamat:e.target.value})} placeholder="Jl. Sudirman 21, Jakarta"/>
+          </div>
+        </div>
+        <div style={{padding:'12px 18px',borderTop:'1px solid var(--line)',display:'flex',gap:8}}>
+          <button className="btn" onClick={onCancel}>Batal</button>
+          <button className="btn btn-primary" style={{marginLeft:'auto'}} onClick={()=>onSave(c)}><Icon name="check" size={13}/> Simpan</button>
+        </div>
       </div>
     </div>
   );

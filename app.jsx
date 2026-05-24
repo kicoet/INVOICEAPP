@@ -40,6 +40,9 @@ function App() {
   const [toasts, setToasts] = useState([]);
   const [brand, setBrand] = usePersistedCollection('brand', KPO.defaultBrand);
   const [invoices, setInvoices] = usePersistedCollection('invoices', []);
+  const [customers, setCustomers] = usePersistedCollection('customers', []);
+  const [products, setProducts] = usePersistedCollection('products', KPO.products);
+  const [stockHistory, setStockHistory] = usePersistedCollection('stockHistory', []);
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   useEffect(() => {
@@ -152,7 +155,7 @@ function App() {
         </header>
 
         <div className="content">
-          {route==='dashboard' && <Dashboard/>}
+          {route==='dashboard' && <Dashboard invoices={invoices} products={products} customers={customers}/>}
           {route==='invoices' && !creating && <InvoicesScreen invoices={invoices} goCreate={()=>{ setEditingInvoice(null); setCreating(true); }} goView={(id)=>{
             const inv = invoices.find(x=>x.id===id);
             if (!inv) return;
@@ -170,12 +173,21 @@ function App() {
           }}/>}
           {route==='invoices' && creating && <CreateInvoice
             invoices={invoices}
+            customers={customers}
+            products={products}
             editInvoice={editingInvoice}
             onCancel={()=>{ setCreating(false); setEditingInvoice(null); }}
             onSave={(payload)=>{
               const today = new Date();
               const tglStr = editingInvoice?.tgl || today.toISOString().slice(0,10);
               const items = payload.items.map(it => ({ nama: it.nama, ukuran: it.ukuran || '', qty: +it.qty || 0, harga: +it.harga || 0, kategori: it.kategori, sku: it.sku }));
+
+              // Auto-add customer to list if it's brand new (matched by nama + perusahaan)
+              const cust = payload.customer || {};
+              const key = (c) => (c.nama || '').trim().toLowerCase() + '|' + (c.perusahaan || '').trim().toLowerCase();
+              if (cust.nama && !customers.some(c => key(c) === key(cust))) {
+                setCustomers([{ id: 'c' + Date.now(), ...cust }, ...customers]);
+              }
 
               if (editingInvoice) {
                 const updated = { ...editingInvoice, customer: payload.customer, items, ongkir: +payload.ongkir||0, biayaTambahan: +payload.biayaTambahan||0, catatan: payload.catatan||'', status: payload.status, pembayaran: payload.pembayaran || [] };
@@ -200,10 +212,10 @@ function App() {
               setEditingInvoice(null);
             }}/>}
           {route==='edit-template' && <EditTemplateScreen brand={brand} setBrand={setBrand} pushToast={pushToast}/>}
-          {route==='products' && <ProductsScreen/>}
-          {route==='stock' && <StockScreen/>}
+          {route==='products' && <ProductsScreen products={products} setProducts={setProducts}/>}
+          {route==='stock' && <StockScreen products={products} setProducts={setProducts} stockHistory={stockHistory} setStockHistory={setStockHistory} pushToast={pushToast}/>}
           {route==='tasks' && <TasksScreen pushToast={pushToast}/>}
-          {route==='customers' && <CustomersScreen/>}
+          {route==='customers' && <CustomersScreen customers={customers} setCustomers={setCustomers} invoices={invoices}/>}
           {route==='notifs' && <NotificationsScreen/>}
           {route==='settings' && <SettingsScreen brand={brand} setBrand={setBrand} pushToast={pushToast}/>}
         </div>

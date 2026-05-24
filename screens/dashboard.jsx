@@ -1,36 +1,84 @@
 // ===== Dashboard Owner =====
 const { useState: useStateDash } = React;
 
-function Dashboard() {
-  const { fmtIDR, omzet30, perKategori, topProducts, topCustomers, invoices, computeInvoice } = KPO;
+function Dashboard({ invoices: invoicesProp, products: productsProp, customers: customersProp }) {
+  const { fmtIDR, computeInvoice, categories } = KPO;
+  const invoices = invoicesProp || KPO.invoices || [];
+  const products = productsProp || KPO.products || [];
   const [range, setRange] = useStateDash('30d');
 
-  // Indonesian short-format: 1.250.000 → "1,25 Jt", 1.250.000.000 → "1,25 Mrd"
   const fmtShort = (n) => {
+    n = +n || 0;
     if (n >= 1_000_000_000) return (n/1_000_000_000).toFixed(2).replace('.',',') + ' Mrd';
     if (n >= 1_000_000) return (n/1_000_000).toFixed(1).replace('.',',') + ' Jt';
     if (n >= 1_000) return (n/1_000).toFixed(0) + ' Rb';
     return String(n);
   };
 
-  const data = omzet30.slice(range==='7d'?-7:range==='14d'?-14:0);
-  const total30 = omzet30.reduce((s,d)=>s+d.v,0);
+  // ---- Real stats derived from invoices ----
+  const today = new Date();
+  const startOf = (daysAgo) => {
+    const d = new Date(today); d.setHours(0,0,0,0); d.setDate(d.getDate() - daysAgo); return d;
+  };
+  const totalsByDay = {}; // ISO date → omzet
+  let totalOmzet = 0, totalLaba = 0, piutangTerbuka = 0;
+  const omzetByKategori = {};   // id → total
+  const omzetByProduct = {};    // nama → { qty, omzet }
+  const omzetByCustomer = {};   // key → { customer, trx, omzet }
+
+  for (const inv of invoices) {
+    const c = computeInvoice(inv);
+    totalOmzet += c.total;
+    piutangTerbuka += c.sisa;
+    totalsByDay[inv.tgl] = (totalsByDay[inv.tgl] || 0) + c.total;
+    // laba estimasi: subtotal - HPP
+    let invHpp = 0;
+    for (const it of inv.items) {
+      const p = products.find(x => x.sku === it.sku);
+      invHpp += (p?.hpp || 0) * (it.qty || 0);
+      omzetByKategori[it.kategori] = (omzetByKategori[it.kategori] || 0) + it.qty * it.harga;
+      const pk = it.nama;
+      omzetByProduct[pk] = omzetByProduct[pk] || { nama: pk, qty: 0, omzet: 0 };
+      omzetByProduct[pk].qty += it.qty;
+      omzetByProduct[pk].omzet += it.qty * it.harga;
+    }
+    totalLaba += (c.subtotal - invHpp);
+    const ck = (inv.customer?.nama || '') + '|' + (inv.customer?.perusahaan || '');
+    omzetByCustomer[ck] = omzetByCustomer[ck] || { ...inv.customer, trx: 0, omzet: 0 };
+    omzetByCustomer[ck].trx += 1;
+    omzetByCustomer[ck].omzet += c.total;
+  }
+
+  const days = range === '7d' ? 7 : range === '14d' ? 14 : 30;
+  const data = Array.from({ length: days }).map((_, i) => {
+    const d = new Date(today); d.setHours(0,0,0,0); d.setDate(d.getDate() - (days - 1 - i));
+    const key = d.toISOString().slice(0,10);
+    return { d: key, v: totalsByDay[key] || 0 };
+  });
   const totalRange = data.reduce((s,d)=>s+d.v,0);
-  const totalInv = (invoices || []).length;
-  const totalLaba = Math.round(totalRange * 0.34);
-  const omzetHari = data.length ? data[data.length-1].v : 0;
+  const omzetHari = totalsByDay[today.toISOString().slice(0,10)] || 0;
+  const omzetMinggu = data.slice(-7).reduce((s,d)=>s+d.v,0);
+  const omzetBulan = data.reduce((s,d)=>s+d.v,0);
+
+  const perKategori = categories.map(cat => ({ kategori: cat.name, omzet: omzetByKategori[cat.id] || 0 })).filter(k => k.omzet > 0);
+  const topProducts = Object.values(omzetByProduct).sort((a,b)=>b.omzet-a.omzet).slice(0,5);
+  const topCustomers = Object.values(omzetByCustomer).sort((a,b)=>b.omzet-a.omzet).slice(0,5);
+
+  const unpaidCount = invoices.filter(i => i.status !== 'Lunas').length;
+  const stockKritis = products.filter(p => (p.stock||0) > 0 && (p.stock||0) < 30).length;
+  const stockHabis = products.filter(p => (p.stock||0) === 0).length;
 
   const kpis = [
-    { label: 'Omzet hari ini',  raw: omzetHari, delta: '+12.4%', spark: data.slice(-7).map(d=>d.v) },
-    { label: 'Omzet mingguan',  raw: data.slice(-7).reduce((s,d)=>s+d.v,0), delta: '+8.1%', spark: data.slice(-14,-7).map(d=>d.v) },
-    { label: 'Omzet bulanan',   raw: total30, delta: '+22.6%', spark: data.map(d=>d.v) },
-    { label: 'Omzet tahunan',   raw: total30*9.4, delta: '+18.2%', spark: data.map(d=>d.v*1.1) },
+    { label: 'Omzet hari ini', raw: omzetHari,   spark: data.slice(-7).map(d=>d.v) },
+    { label: 'Omzet mingguan', raw: omzetMinggu, spark: data.slice(-7).map(d=>d.v) },
+    { label: 'Omzet bulanan',  raw: omzetBulan,  spark: data.map(d=>d.v) },
+    { label: 'Total omzet',    raw: totalOmzet,  spark: data.map(d=>d.v) },
   ];
   const kpis2 = [
-    { label: 'Total invoice',   value: '128',                sub: '6 bulan ini', tone: 'ink' },
-    { label: 'Estimasi laba',   value: fmtShort(totalLaba),  sub: '34% margin · IDR', tone: 'positive' },
-    { label: 'Piutang terbuka', value: fmtShort(8_240_000),  sub: '4 invoice belum lunas · IDR', tone: 'warn' },
-    { label: 'Stock kritis',    value: '3 item',             sub: 'di bawah ambang batas', tone: 'negative' },
+    { label: 'Total invoice',   value: String(invoices.length), sub: 'sejak awal',           tone: 'ink' },
+    { label: 'Estimasi laba',   value: fmtShort(totalLaba),     sub: 'subtotal − HPP · IDR', tone: 'positive' },
+    { label: 'Piutang terbuka', value: fmtShort(piutangTerbuka),sub: `${unpaidCount} invoice belum lunas · IDR`, tone: 'warn' },
+    { label: 'Stock kritis',    value: `${stockKritis + stockHabis} item`, sub: `${stockHabis} habis · ${stockKritis} menipis`, tone: 'negative' },
   ];
 
   return (
@@ -46,7 +94,7 @@ function Dashboard() {
             <div className="kpi-value num">{fmtShort(k.raw)}</div>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
               <span style={{fontSize:10,color:'var(--ink-dim)',letterSpacing:'0.14em'}}>IDR</span>
-              <span className="kpi-delta"><Icon name="arrowUp" size={11}/>{k.delta}</span>
+              {k.delta && <span className="kpi-delta"><Icon name="arrowUp" size={11}/>{k.delta}</span>}
             </div>
           </div>
         ))}
