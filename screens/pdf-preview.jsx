@@ -402,6 +402,7 @@ async function buildPdfBlob() {
         windowWidth: 760,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css'] },
     }).from(el).outputPdf('blob');
   } finally {
     restore(el, elSnap);

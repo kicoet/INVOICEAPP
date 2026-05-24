@@ -10,6 +10,24 @@ function PdfKemala({ inv, comp, brand }) {
   // Indonesian rupiah formatting: Rp 4.225.000
   const rp = (n) => 'Rp ' + Number(n).toLocaleString('id-ID');
 
+  // dd/mm/yyyy from ISO YYYY-MM-DD (or any Date-parseable string)
+  const fmtTgl = (s) => {
+    if (!s) return '—';
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}/${d.getFullYear()}`;
+  };
+
+  // Logo letter: prefer first letter of meaningful brand word (skip "CV", "PT", "UD", "CV.", etc.)
+  const logoLetter = (() => {
+    const skip = new Set(['cv','pt','ud','pd','tb','toko']);
+    const words = String(brand.name || 'Kemala').replace(/\./g,'').split(/\s+/).filter(Boolean);
+    const meaningful = words.find(w => !skip.has(w.toLowerCase())) || words[0] || 'K';
+    return meaningful[0].toUpperCase();
+  })();
+
   const dibayar = (inv.pembayaran || []).reduce((s, p) => s + p.jumlah, 0);
 
   return (
@@ -36,7 +54,7 @@ function PdfKemala({ inv, comp, brand }) {
                 </defs>
                 <polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="url(#hex-grad)" />
                 <polygon points="32,12 50,22 50,42 32,52 14,42 14,22" fill="none" stroke="#fff" strokeWidth="1.4" opacity=".55" />
-                <text x="32" y="40" textAnchor="middle" fill="#fff" fontFamily="Instrument Serif, serif" fontSize="24" fontStyle="italic">{(brand.name || 'K')[0]}</text>
+                <text x="32" y="40" textAnchor="middle" fill="#fff" fontFamily="Instrument Serif, serif" fontSize="24" fontStyle="italic">{logoLetter}</text>
               </svg>
               )}
               <div>
@@ -59,7 +77,7 @@ function PdfKemala({ inv, comp, brand }) {
                 <CalIcon color={orange} />
                 <span style={{ minWidth: 78 }}>Tanggal</span>
                 <span style={{ color: '#aaa' }}>:</span>
-                <span className="num">{inv.tanggal || '2026-05-23'}</span>
+                <span className="num">{fmtTgl(inv.tanggal)}</span>
               </div>
             </div>
           </div>
