@@ -6,8 +6,39 @@ function ProductsScreen({ products: productsProp, setProducts }) {
   const products = productsProp || KPO.products;
   const [cat, setCat] = useStateProd('all');
   const [q, setQ] = useStateProd('');
+  const [editing, setEditing] = useStateProd(null); // null = closed, {} = new, {sku} = edit
 
   const list = products.filter(p => (cat==='all'||p.kategori===cat) && (!q || p.nama.toLowerCase().includes(q.toLowerCase())));
+
+  const save = (data, originalSku) => {
+    if (!data.nama.trim()) { alert('Nama produk wajib diisi.'); return; }
+    if (!data.sku.trim()) { alert('SKU wajib diisi.'); return; }
+    const skuTaken = products.some(p => p.sku === data.sku && p.sku !== originalSku);
+    if (skuTaken) { alert('SKU sudah dipakai produk lain.'); return; }
+    const clean = {
+      sku: data.sku.trim().toUpperCase(),
+      kategori: data.kategori,
+      nama: data.nama.trim(),
+      satuan: data.satuan || 'batang',
+      harga: +data.harga || 0,
+      hpp: +data.hpp || 0,
+      stock: +data.stock || 0,
+      status: data.status || 'aktif',
+    };
+    if (originalSku) {
+      setProducts(products.map(p => p.sku === originalSku ? clean : p));
+    } else {
+      setProducts([clean, ...products]);
+    }
+    setEditing(null);
+  };
+  const del = (sku) => {
+    if (!confirm('Hapus produk ' + sku + '?')) return;
+    setProducts(products.filter(p => p.sku !== sku));
+  };
+  const toggleStatus = (sku) => {
+    setProducts(products.map(p => p.sku === sku ? { ...p, status: p.status === 'aktif' ? 'nonaktif' : 'aktif' } : p));
+  };
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -21,7 +52,7 @@ function ProductsScreen({ products: productsProp, setProducts }) {
           <input className="input" placeholder="Cari produk…" value={q} onChange={e=>setQ(e.target.value)} style={{paddingLeft:30}}/>
           <span style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',color:'var(--ink-dim)'}}><Icon name="search" size={13}/></span>
         </div>
-        <button className="btn btn-primary"><Icon name="plus" size={14}/> Tambah Produk</button>
+        <button className="btn btn-primary" onClick={()=>setEditing({ sku:'', kategori: categories[0].id, nama:'', satuan:'batang', harga:0, hpp:0, stock:0, status:'aktif' })}><Icon name="plus" size={14}/> Tambah Produk</button>
       </div>
 
       <div className="card" style={{overflow:'hidden'}}>
@@ -40,14 +71,20 @@ function ProductsScreen({ products: productsProp, setProducts }) {
             </tr>
           </thead>
           <tbody>
+            {list.length === 0 && (
+              <tr><td colSpan={9} style={{padding:'40px 16px',textAlign:'center',color:'var(--ink-mute)'}}>
+                Belum ada produk. Klik <b style={{color:'var(--ink)'}}>Tambah Produk</b> untuk mulai.
+              </td></tr>
+            )}
             {list.map(p => {
-              const margin = Math.round((p.harga-p.hpp)/p.harga*100);
+              const margin = p.harga ? Math.round((p.harga-p.hpp)/p.harga*100) : 0;
               const lowStock = p.stock < 30;
+              const cat = categories.find(c=>c.id===p.kategori);
               return (
                 <tr key={p.sku}>
                   <td className="num" style={{color:'var(--ink-mute)',fontSize:11.5}}>{p.sku}</td>
                   <td>{p.nama}</td>
-                  <td><span className="chip">{categories.find(c=>c.id===p.kategori).name}</span></td>
+                  <td><span className="chip">{cat ? cat.name : p.kategori}</span></td>
                   <td style={{textAlign:'right'}} className="num">{fmtIDR(p.harga)}</td>
                   <td style={{textAlign:'right',color:'var(--ink-mute)'}} className="num">{fmtIDR(p.hpp)}</td>
                   <td style={{textAlign:'right'}} className="num"><span style={{color:'var(--positive)'}}>{margin}%</span></td>
@@ -57,17 +94,71 @@ function ProductsScreen({ products: productsProp, setProducts }) {
                     </span>
                   </td>
                   <td>
-                    <span className="switch on"/>
+                    <span className={'switch'+(p.status==='aktif'?' on':'')} onClick={()=>toggleStatus(p.sku)} style={{cursor:'pointer'}}/>
                   </td>
                   <td style={{textAlign:'right'}}>
-                    <button className="btn btn-ghost btn-icon"><Icon name="edit" size={13}/></button>
-                    <button className="btn btn-ghost btn-icon"><Icon name="trash" size={13}/></button>
+                    <button className="btn btn-ghost btn-icon" title="Edit" onClick={()=>setEditing(p)}><Icon name="edit" size={13}/></button>
+                    <button className="btn btn-ghost btn-icon" title="Hapus" onClick={()=>del(p.sku)}><Icon name="trash" size={13}/></button>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+      </div>
+
+      {editing && <ProductModal initial={editing} categories={categories} onCancel={()=>setEditing(null)} onSave={save}/>}
+    </div>
+  );
+}
+
+function ProductModal({ initial, categories, onCancel, onSave }) {
+  const [p, setP] = useStateProd(initial);
+  const originalSku = initial.sku || null;
+  const upd = (patch) => setP({ ...p, ...patch });
+  return (
+    <div className="scrim" onClick={(e)=>{ if(e.target.classList.contains('scrim')) onCancel(); }}>
+      <div className="modal" style={{width:500,padding:0,display:'flex',flexDirection:'column'}}>
+        <div style={{padding:'16px 18px',borderBottom:'1px solid var(--line)'}}>
+          <div className="card-sub">{originalSku ? 'Edit' : 'Tambah'} Produk</div>
+          <div className="font-serif" style={{fontSize:20}}>{originalSku ? p.nama || originalSku : 'Produk baru'}</div>
+        </div>
+        <div style={{padding:18,display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+          <div className="field" style={{gridColumn:'1 / -1'}}>
+            <label className="field-label">Nama produk</label>
+            <input className="input" autoFocus value={p.nama} onChange={e=>upd({nama:e.target.value})} placeholder="Plint Laminate 10cm"/>
+          </div>
+          <div className="field">
+            <label className="field-label">SKU</label>
+            <input className="input num" value={p.sku} onChange={e=>upd({sku:e.target.value.toUpperCase()})} placeholder="PLT-10"/>
+          </div>
+          <div className="field">
+            <label className="field-label">Kategori</label>
+            <select className="select" value={p.kategori} onChange={e=>upd({kategori:e.target.value})}>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field-label">Harga jual</label>
+            <input className="input num" type="number" value={p.harga} onChange={e=>upd({harga:+e.target.value||0})} style={{textAlign:'right'}}/>
+          </div>
+          <div className="field">
+            <label className="field-label">HPP / modal</label>
+            <input className="input num" type="number" value={p.hpp} onChange={e=>upd({hpp:+e.target.value||0})} style={{textAlign:'right'}}/>
+          </div>
+          <div className="field">
+            <label className="field-label">Stock awal</label>
+            <input className="input num" type="number" value={p.stock} onChange={e=>upd({stock:+e.target.value||0})} style={{textAlign:'right'}}/>
+          </div>
+          <div className="field">
+            <label className="field-label">Satuan</label>
+            <input className="input" value={p.satuan} onChange={e=>upd({satuan:e.target.value})} placeholder="batang"/>
+          </div>
+        </div>
+        <div style={{padding:'12px 18px',borderTop:'1px solid var(--line)',display:'flex',gap:8}}>
+          <button className="btn" onClick={onCancel}>Batal</button>
+          <button className="btn btn-primary" style={{marginLeft:'auto'}} onClick={()=>onSave(p, originalSku)}><Icon name="check" size={13}/> Simpan</button>
+        </div>
       </div>
     </div>
   );
